@@ -1,4 +1,4 @@
-package parser
+package src
 
 func Parse(input string) (*Node, error) {
 	root:=&Node{Type: DocumentNode}
