@@ -66,9 +66,7 @@ func getResult(c *gin.Context) {
 	if req.Algorithm == "dfs" {
 		_, logs, visitedCount, searchErr = src.SearchDFS(root, req.Selector, req.TopN)
 	} else if req.Algorithm == "bfs" {
-		// BFS endpoint placeholder
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "BFS not implemented yet"})
-		return
+		_, logs, visitedCount, searchErr = src.BFSSearch(root, req.Selector, req.TopN)
 	} else {
 		searchErr = fmt.Errorf("Unknown algorithm: %s", req.Algorithm)
 	}
