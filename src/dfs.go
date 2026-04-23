@@ -1,6 +1,10 @@
 package src
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+	"sync/atomic"
+)
 
 type LogEntry struct {
 	NodeID int    `json:"nodeId"`
@@ -17,51 +21,73 @@ func SearchDFS(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 		return nil, nil, 0, err
 	}
 
-	var results []*Node
-	var logs []LogEntry
-	nodesVisited := 0
-
-	var dfs func(n *Node) bool
-	dfs = func(n *Node) bool {
-		if n == nil {
-			return false
-		}
-
-		if n.Type == ElementNode || n.Type == DocumentNode {
-			nodesVisited++
-			match := false
-			if n.Type == ElementNode && selector.Match(n) {
-				match = true
-				results = append(results, n)
-			}
-
-			status := "visited"
-			if match {
-				status = "matched"
-			}
-
-			if n.Type == ElementNode {
-				logs = append(logs, LogEntry{
-					NodeID: n.ID,
-					Tag:    n.Tag,
-					Status: status,
-				})
-			}
-			if topN > 0 && len(results) >= topN {
-				return true
-			}
-		}
-		for _, child := range n.Children {
-			if dfs(child) {
-				return true
-			}
-		}
-		return false
+	type subtreeResult struct {
+		results []*Node
+		logs    []LogEntry
+		visited int
 	}
 
-	dfs(root)
+	var totalFound int32
 
-	return results, logs, nodesVisited, nil
+	var dfs func(n *Node) subtreeResult
+	dfs = func(n *Node) subtreeResult {
+		if n == nil {
+			return subtreeResult{}
+		}
+		if topN > 0 && atomic.LoadInt32(&totalFound) >= int32(topN) {
+			return subtreeResult{}
+		}
+
+		var r subtreeResult
+
+		if n.Type == ElementNode || n.Type == DocumentNode {
+			r.visited = 1
+			if n.Type == ElementNode {
+				match := selector.Match(n)
+				if match {
+					atomic.AddInt32(&totalFound, 1)
+					r.results = []*Node{n}
+				}
+				status := "visited"
+				if match {
+					status = "matched"
+				}
+				r.logs = []LogEntry{{NodeID: n.ID, Tag: n.Tag, Status: status}}
+			}
+		}
+
+		if len(n.Children) == 0 {
+			return r
+		}
+
+		childResults := make([]subtreeResult, len(n.Children))
+		var wg sync.WaitGroup
+		for i, child := range n.Children {
+			wg.Add(1)
+			go func(idx int, c *Node) {
+				defer wg.Done()
+				childResults[idx] = dfs(c)
+			}(i, child)
+		}
+		wg.Wait()
+
+		for _, cr := range childResults {
+			r.results = append(r.results, cr.results...)
+			r.logs = append(r.logs, cr.logs...)
+			r.visited += cr.visited
+		}
+
+		return r
+	}
+
+	res := dfs(root)
+
+	results := res.results
+	if topN > 0 && len(results) > topN {
+		results = results[:topN]
+	}
+
+	return results, res.logs, res.visited, nil
 }
 
 type JSONNode struct {

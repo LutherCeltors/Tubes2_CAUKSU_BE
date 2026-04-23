@@ -1,6 +1,10 @@
 package src
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+	"sync/atomic"
+)
 
 func BFSSearch(root *Node, query string, topN int) ([]*Node, []LogEntry, int, error) {
 	if root == nil {
@@ -11,40 +15,71 @@ func BFSSearch(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 		return nil, nil, 0, err
 	}
 
-	var results []*Node
-	var logs []LogEntry
-	nodesVisited := 0
+	type levelResult struct {
+		matched  *Node
+		logEntry *LogEntry
+		children []*Node
+	}
 
-	queue := []*Node{root}
-	for len(queue) > 0 {
-		node := queue[0]
-		queue = queue[1:]
+	var (
+		results      []*Node
+		logs         []LogEntry
+		nodesVisited int32
+	)
 
-		if node.Type == ElementNode || node.Type == DocumentNode {
-			nodesVisited++
-			match := false
-			if node.Type == ElementNode && selector.Match(node) {
-				match = true
-				results = append(results, node)
-			}
-			if node.Type == ElementNode {
-				status := "visited"
-				if match {
-					status = "matched"
+	currentLevel := []*Node{root}
+
+	for len(currentLevel) > 0 {
+		levelResults := make([]levelResult, len(currentLevel))
+		var wg sync.WaitGroup
+
+		for i, node := range currentLevel {
+			wg.Add(1)
+			go func(idx int, n *Node) {
+				defer wg.Done()
+				r := levelResult{children: n.Children}
+				if n.Type == ElementNode || n.Type == DocumentNode {
+					atomic.AddInt32(&nodesVisited, 1)
+					if n.Type == ElementNode {
+						match := selector.Match(n)
+						if match {
+							r.matched = n
+						}
+						status := "visited"
+						if match {
+							status = "matched"
+						}
+						entry := LogEntry{NodeID: n.ID, Tag: n.Tag, Status: status}
+						r.logEntry = &entry
+					}
 				}
-				logs = append(logs, LogEntry{
-					NodeID: node.ID,
-					Tag:    node.Tag,
-					Status: status,
-				})
+				levelResults[idx] = r
+			}(i, node)
+		}
+
+		wg.Wait()
+
+		var nextLevel []*Node
+		stop := false
+		for _, r := range levelResults {
+			if r.logEntry != nil {
+				logs = append(logs, *r.logEntry)
 			}
+			if r.matched != nil {
+				results = append(results, r.matched)
+			}
+			nextLevel = append(nextLevel, r.children...)
 			if topN > 0 && len(results) >= topN {
+				stop = true
 				break
 			}
 		}
 
-		queue = append(queue, node.Children...)
+		if stop {
+			break
+		}
+		currentLevel = nextLevel
 	}
 
-	return results, logs, nodesVisited, nil
+	return results, logs, int(atomic.LoadInt32(&nodesVisited)), nil
 }

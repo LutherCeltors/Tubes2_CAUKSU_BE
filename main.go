@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 	"tubes2_cauksu_be/src"
 
@@ -89,6 +90,14 @@ func getResult(c *gin.Context) {
 	})
 }
 
+func getEnv(key, fallback string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
 // JSON Outputnya:
 // {
 //   "executionTimeMs": 2.5,
@@ -132,7 +141,7 @@ func main() {
 
 	r.POST("/api/data", getResult)
 
-	port := "8080"
+	port := getEnv("PORT", "8080")
 	fmt.Printf("Gin backend server is listening on http://localhost:%s\n", port)
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Failed to start Gin server: ", err)
