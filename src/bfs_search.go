@@ -28,6 +28,7 @@ func BFSSearch(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 	)
 
 	currentLevel := []*Node{root}
+	levelIndex := 0
 
 	for len(currentLevel) > 0 {
 		levelResults := make([]levelResult, len(currentLevel))
@@ -35,7 +36,7 @@ func BFSSearch(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 
 		for i, node := range currentLevel {
 			wg.Add(1)
-			go func(idx int, n *Node) {
+			go func(idx int, n *Node, batch int) {
 				defer wg.Done()
 				r := levelResult{children: n.Children}
 				if n.Type == ElementNode || n.Type == DocumentNode {
@@ -49,12 +50,12 @@ func BFSSearch(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 						if match {
 							status = "matched"
 						}
-						entry := LogEntry{NodeID: n.ID, Tag: n.Tag, Status: status}
+						entry := LogEntry{NodeID: n.ID, Tag: n.Tag, Status: status, Batch: batch}
 						r.logEntry = &entry
 					}
 				}
 				levelResults[idx] = r
-			}(i, node)
+			}(i, node, levelIndex)
 		}
 
 		wg.Wait()
@@ -79,7 +80,52 @@ func BFSSearch(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 			break
 		}
 		currentLevel = nextLevel
+		levelIndex++
 	}
 
 	return results, logs, int(atomic.LoadInt32(&nodesVisited)), nil
+}
+
+func BFSSearchSingle(root *Node, query string, topN int) ([]*Node, []LogEntry, int, error) {
+	if root == nil {
+		return nil, nil, 0, fmt.Errorf("root node is nil")
+	}
+	selector, err := ParseSelector(query)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	var results []*Node
+	var logs []LogEntry
+	nodesVisited := 0
+	batchIndex := 0
+
+	queue := []*Node{root}
+
+	for len(queue) > 0 {
+		node := queue[0]
+		queue = queue[1:]
+
+		if node.Type == ElementNode || node.Type == DocumentNode {
+			nodesVisited++
+			if node.Type == ElementNode {
+				match := selector.Match(node)
+				status := "visited"
+				if match {
+					status = "matched"
+					results = append(results, node)
+				}
+				logs = append(logs, LogEntry{NodeID: node.ID, Tag: node.Tag, Status: status, Batch: batchIndex})
+				batchIndex++
+			}
+		}
+
+		if topN > 0 && len(results) >= topN {
+			break
+		}
+
+		queue = append(queue, node.Children...)
+	}
+
+	return results, logs, nodesVisited, nil
 }

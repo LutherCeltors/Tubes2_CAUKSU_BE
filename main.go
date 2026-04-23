@@ -17,6 +17,7 @@ type InputData struct {
 	Url        string `json:"url"`
 	Html       string `json:"html"`
 	Algorithm  string `json:"algorithm"`
+	Threading  string `json:"threading"`
 	Selector   string `json:"selector"`
 	ResultMode string `json:"resultMode"`
 	TopN       int    `json:"topN"`
@@ -64,10 +65,20 @@ func getResult(c *gin.Context) {
 	var visitedCount int
 	var searchErr error
 
+	multi := req.Threading != "single"
+
 	if req.Algorithm == "dfs" {
-		_, logs, visitedCount, searchErr = src.SearchDFS(root, req.Selector, req.TopN)
+		if multi {
+			_, logs, visitedCount, searchErr = src.SearchDFS(root, req.Selector, req.TopN)
+		} else {
+			_, logs, visitedCount, searchErr = src.SearchDFSSingle(root, req.Selector, req.TopN)
+		}
 	} else if req.Algorithm == "bfs" {
-		_, logs, visitedCount, searchErr = src.BFSSearch(root, req.Selector, req.TopN)
+		if multi {
+			_, logs, visitedCount, searchErr = src.BFSSearch(root, req.Selector, req.TopN)
+		} else {
+			_, logs, visitedCount, searchErr = src.BFSSearchSingle(root, req.Selector, req.TopN)
+		}
 	} else {
 		searchErr = fmt.Errorf("Unknown algorithm: %s", req.Algorithm)
 	}

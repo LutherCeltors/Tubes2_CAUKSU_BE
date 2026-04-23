@@ -10,6 +10,7 @@ type LogEntry struct {
 	NodeID int    `json:"nodeId"`
 	Tag    string `json:"tag"`
 	Status string `json:"status"`
+	Batch  int    `json:"batch"`
 }
 
 func SearchDFS(root *Node, query string, topN int) ([]*Node, []LogEntry, int, error) {
@@ -29,8 +30,8 @@ func SearchDFS(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 
 	var totalFound int32
 
-	var dfs func(n *Node) subtreeResult
-	dfs = func(n *Node) subtreeResult {
+	var dfs func(n *Node, depth int) subtreeResult
+	dfs = func(n *Node, depth int) subtreeResult {
 		if n == nil {
 			return subtreeResult{}
 		}
@@ -52,7 +53,7 @@ func SearchDFS(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 				if match {
 					status = "matched"
 				}
-				r.logs = []LogEntry{{NodeID: n.ID, Tag: n.Tag, Status: status}}
+				r.logs = []LogEntry{{NodeID: n.ID, Tag: n.Tag, Status: status, Batch: depth}}
 			}
 		}
 
@@ -66,7 +67,7 @@ func SearchDFS(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 			wg.Add(1)
 			go func(idx int, c *Node) {
 				defer wg.Done()
-				childResults[idx] = dfs(c)
+				childResults[idx] = dfs(c, depth+1)
 			}(i, child)
 		}
 		wg.Wait()
@@ -80,7 +81,7 @@ func SearchDFS(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 		return r
 	}
 
-	res := dfs(root)
+	res := dfs(root, 0)
 
 	results := res.results
 	if topN > 0 && len(results) > topN {
@@ -88,6 +89,52 @@ func SearchDFS(root *Node, query string, topN int) ([]*Node, []LogEntry, int, er
 	}
 
 	return results, res.logs, res.visited, nil
+}
+
+func SearchDFSSingle(root *Node, query string, topN int) ([]*Node, []LogEntry, int, error) {
+	if root == nil {
+		return nil, nil, 0, fmt.Errorf("root node is nil")
+	}
+	selector, err := ParseSelector(query)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	var results []*Node
+	var logs []LogEntry
+	nodesVisited := 0
+	batchIndex := 0
+
+	var dfs func(n *Node)
+	dfs = func(n *Node) {
+		if n == nil {
+			return
+		}
+		if topN > 0 && len(results) >= topN {
+			return
+		}
+
+		if n.Type == ElementNode || n.Type == DocumentNode {
+			nodesVisited++
+			if n.Type == ElementNode {
+				match := selector.Match(n)
+				status := "visited"
+				if match {
+					status = "matched"
+					results = append(results, n)
+				}
+				logs = append(logs, LogEntry{NodeID: n.ID, Tag: n.Tag, Status: status, Batch: batchIndex})
+				batchIndex++
+			}
+		}
+
+		for _, child := range n.Children {
+			dfs(child)
+		}
+	}
+
+	dfs(root)
+	return results, logs, nodesVisited, nil
 }
 
 type JSONNode struct {
