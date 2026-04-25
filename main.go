@@ -21,14 +21,15 @@ type InputData struct {
 	Selector   string `json:"selector"`
 	ResultMode string `json:"resultMode"`
 	TopN       int    `json:"topN"`
-	NodeId1    int    `jason:"nodeId1"`
-	NodeId2    int    `jason:"nodeId2"`
+	NodeId1    *int   `json:"nodeId1"`
+	NodeId2    *int   `json:"nodeId2"`
 }
 
 func CalculateMaxDepth(root *src.Node) int {
 	if root == nil {
 		return 0
 	}
+
 	maxChildDepth := 0
 	for _, child := range root.Children {
 		depth := CalculateMaxDepth(child)
@@ -45,15 +46,17 @@ func getResult(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
 	var root *src.Node
 	var err error
+
 	switch req.Mode {
 	case "url":
 		root, err = src.ParseURLToDOMTree(req.Url)
 	case "html":
 		root, err = src.ParseToDOMTreeManual(req.Html)
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown mode: %s", req.Mode)})
 		return
 	}
 
@@ -63,38 +66,58 @@ func getResult(c *gin.Context) {
 	}
 
 	start := time.Now()
-	var logs []src.LogEntry
-	var visitedCount int
+	logs := []src.LogEntry{}
+	visitedCount := 0
 	var searchErr error
 
 	multi := req.Threading != "single"
 
-	if req.Algorithm == "dfs" {
+	switch req.Algorithm {
+	case "dfs":
 		if multi {
 			_, logs, visitedCount, searchErr = src.SearchDFS(root, req.Selector, req.TopN)
 		} else {
 			_, logs, visitedCount, searchErr = src.SearchDFSSingle(root, req.Selector, req.TopN)
 		}
-	} else if req.Algorithm == "bfs" {
+
+	case "bfs":
 		if multi {
 			_, logs, visitedCount, searchErr = src.BFSSearch(root, req.Selector, req.TopN)
 		} else {
 			_, logs, visitedCount, searchErr = src.BFSSearchSingle(root, req.Selector, req.TopN)
 		}
-	} else if req.Algorithm == "lca" {
+
+	case "lca":
+		if req.NodeId1 == nil && req.NodeId2 == nil {
+			logs = []src.LogEntry{}
+			visitedCount = 0
+			break
+		}
+
+		if req.NodeId1 == nil || req.NodeId2 == nil {
+			searchErr = fmt.Errorf("nodeId1 and nodeId2 are required for LCA search")
+			break
+		}
+
 		lca, err := src.PreproccessLCABinaryLifting(root)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return 
+			return
 		}
-		_, logs, visitedCount, searchErr = lca.SearchLCAByID(req.NodeId1, req.NodeId2);
-	} else {
-		searchErr = fmt.Errorf("Unknown algorithm: %s", req.Algorithm)
+
+		_, logs, visitedCount, searchErr = lca.SearchLCAByID(*req.NodeId1, *req.NodeId2)
+
+	default:
+		searchErr = fmt.Errorf("unknown algorithm: %s", req.Algorithm)
 	}
 
 	if searchErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": searchErr.Error()})
 		return
+	}
+
+	if logs == nil {
+		logs = []src.LogEntry{}
 	}
 
 	executionTimeMs := float64(time.Since(start).Microseconds()) / 1000.0
@@ -150,7 +173,6 @@ func getEnv(key, fallback string) string {
 func main() {
 	r := gin.Default()
 
-	// Configure CORS Middleware
 	r.Use(cors.New(cors.Config{
 		AllowAllOrigins:  true,
 		AllowMethods:     []string{"POST", "GET", "OPTIONS", "PUT", "DELETE"},
