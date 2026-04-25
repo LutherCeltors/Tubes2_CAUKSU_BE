@@ -2,6 +2,7 @@ package src
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -140,6 +141,7 @@ func SearchDFSSingle(root *Node, query string, topN int) ([]*Node, []LogEntry, i
 type JSONNode struct {
 	ID         int               `json:"id"`
 	Tag        string            `json:"tag"`
+	Text       string            `json:"text,omitempty"`
 	Attributes map[string]string `json:"attributes,omitempty"`
 	Children   []*JSONNode       `json:"children,omitempty"`
 }
@@ -148,26 +150,38 @@ func ConvertToJSONNode(n *Node) *JSONNode {
 	if n == nil {
 		return nil
 	}
-	if n.Type != ElementNode && n.Type != DocumentNode {
+	switch n.Type {
+	case ElementNode, DocumentNode:
+		attrs := make(map[string]string)
+		for _, a := range n.Attrs {
+			attrs[a.Name] = a.Value
+		}
+		tag := n.Tag
+		if n.Type == DocumentNode {
+			tag = "document"
+		}
+		res := &JSONNode{
+			ID:         n.ID,
+			Tag:        tag,
+			Attributes: attrs,
+		}
+		for _, child := range n.Children {
+			if cJson := ConvertToJSONNode(child); cJson != nil {
+				res.Children = append(res.Children, cJson)
+			}
+		}
+		return res
+	case TextNode:
+		trimmed := strings.TrimSpace(n.Data)
+		if trimmed == "" {
+			return nil
+		}
+		return &JSONNode{
+			ID:   n.ID,
+			Tag:  "#text",
+			Text: trimmed,
+		}
+	default:
 		return nil
 	}
-	attrs := make(map[string]string)
-	for _, a := range n.Attrs {
-		attrs[a.Name] = a.Value
-	}
-	tag := n.Tag
-	if n.Type == DocumentNode {
-		tag = "document"
-	}
-	res := &JSONNode{
-		ID:         n.ID,
-		Tag:        tag,
-		Attributes: attrs,
-	}
-	for _, child := range n.Children {
-		if cJson := ConvertToJSONNode(child); cJson != nil {
-			res.Children = append(res.Children, cJson)
-		}
-	}
-	return res
 }
