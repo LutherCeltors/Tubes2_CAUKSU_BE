@@ -21,6 +21,8 @@ type InputData struct {
 	Selector   string `json:"selector"`
 	ResultMode string `json:"resultMode"`
 	TopN       int    `json:"topN"`
+	NodeId1    int    `jason:"nodeId1"`
+	NodeId2    int    `jason:"nodeId2"`
 }
 
 func CalculateMaxDepth(root *src.Node) int {
@@ -79,6 +81,13 @@ func getResult(c *gin.Context) {
 		} else {
 			_, logs, visitedCount, searchErr = src.BFSSearchSingle(root, req.Selector, req.TopN)
 		}
+	} else if req.Algorithm == "lca" {
+		lca, err := src.PreproccessLCABinaryLifting(root)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return 
+		}
+		_, logs, visitedCount, searchErr = lca.SearchLCAByID(req.NodeId1, req.NodeId2);
 	} else {
 		searchErr = fmt.Errorf("Unknown algorithm: %s", req.Algorithm)
 	}
