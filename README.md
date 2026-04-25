@@ -3,7 +3,7 @@
 
 ## Penjelasan Singkat Algoritma
 
-Program ini mengimplementasikan pencarian elemen pada struktur DOM-like tree menggunakan algoritma Breadth First Search (BFS) dan Depth First Search (DFS). Query yang diberikan akan diparse menjadi selector menggunakan fungsi `ParseSelector`, kemudian selector tersebut digunakan untuk menentukan apakah suatu node memenuhi kriteria pencarian.
+Program ini mengimplementasikan pencarian elemen pada struktur DOM-like tree menggunakan algoritma Breadth First Search (BFS) dan Depth First Search (DFS). Query yang diberikan akan diparse menjadi selector yang akan digunakan untuk menentukan apakah suatu node memenuhi kriteria pencarian.
 
 ### Depth First Search (DFS)
 
@@ -20,8 +20,6 @@ Selama traversal, program menyimpan beberapa informasi utama:
 Pada setiap pemanggilan DFS, node akan diperiksa terlebih dahulu. Jika node bertipe `ElementNode` atau `DocumentNode`, maka node dihitung sebagai node yang dikunjungi. Jika node bertipe `ElementNode` dan memenuhi kondisi selector melalui `selector.Match(n)`, node tersebut akan ditambahkan ke dalam `results`.
 
 Setiap node yang dikunjungi dicatat ke dalam `logs` dengan informasi `NodeID`, `Tag`, dan `Status`. Status bernilai `matched` jika node memenuhi query, dan `visited` jika node hanya dikunjungi. Traversal kemudian dilanjutkan secara rekursif ke seluruh child dari node tersebut. Jika jumlah hasil sudah mencapai batas `topN`, traversal dapat dihentikan lebih awal.
-
-Setelah proses selesai, fungsi mengembalikan daftar node hasil pencarian, log traversal, jumlah node yang dikunjungi, serta error jika ada. Program juga menyediakan fungsi `ConvertToJSONNode` untuk mengonversi struktur `Node` menjadi `JSONNode` secara rekursif, sehingga tree dapat diserialisasi ke JSON untuk kebutuhan frontend dan visualisasi.
 
 ### Breadth First Search (BFS)
 
@@ -41,15 +39,15 @@ Pada setiap iterasi, `logs` menyimpan `id`, `tag`, dan `status` dari node yang d
 
 Untuk menjalankan program secara manual, diperlukan:
 
-- Go 1.25 atau versi yang kompatibel dengan `go.mod`.
-- Node.js 22 atau versi yang kompatibel.
-- npm.
-- Browser modern untuk membuka frontend.
+- Go 1.25 atau versi yang kompatibel dengan `go.mod`
+- Node.js 22 atau versi yang kompatibel
+- npm
+- Browser modern untuk membuka frontend
 
 Untuk menjalankan program menggunakan Docker, diperlukan:
 
-- Docker.
-- Docker Compose.
+- Docker
+- Docker Compose
 
 ## Instalasi dan Menjalankan Program
 
